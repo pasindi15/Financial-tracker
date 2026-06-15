@@ -32,7 +32,7 @@
         <select id="month-select" onchange="loadBudget()" class="select-field border-0 p-0 pr-6 focus:ring-0 font-semibold text-slate-700">
             @foreach(['January','February','March','April','May','June','July','August','September','October','November','December'] as $i => $m)
                 <option value="{{ $i + 1 }}" {{ now()->month == $i+1 ? 'selected' : '' }}>{{ $m }}</option>
-            @endfor
+            @endforeach
         </select>
     </div>
 </div>
@@ -87,7 +87,12 @@
                 <p class="text-xs text-slate-400 mt-0.5">Monthly breakdown by category</p>
             </div>
         </div>
-        <div id="pivot-table"></div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm" id="pivot-table">
+                <thead id="pivot-head"></thead>
+                <tbody id="pivot-body"></tbody>
+            </table>
+        </div>
     </div>
     <div class="panel">
         <div class="panel-header">
@@ -96,7 +101,21 @@
                 <p class="text-xs text-slate-400 mt-0.5">Selected month comparison</p>
             </div>
         </div>
-        <div id="budget-table"></div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-100 bg-slate-50">
+                        <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-6 py-3">Category</th>
+                        <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Budget</th>
+                        <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Actual</th>
+                        <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Variance</th>
+                        <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 w-44">Usage</th>
+                        <th class="text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="budget-body"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -170,79 +189,99 @@ function loadPivot() {
     fetch('/api/reports/pivot?year=' + getYear(), { headers: apiHeaders })
     .then(r => r.json())
     .then(({ months, rows }) => {
-        const columns = [
-            { title: 'Category', field: 'category', frozen: true, width: 150,
-              formatter: c => `<span class="font-semibold text-slate-800">${c.getValue()}</span>` },
-            ...months.map(m => ({
-                title: m, field: m, width: 85, hozAlign: 'right',
-                formatter: cell => {
-                    const v = cell.getValue();
-                    if (!v) return '<span class="text-slate-300">—</span>';
-                    const intensity = Math.min(v / 800, 1);
-                    const bg = `rgba(99, 102, 241, ${intensity * 0.15})`;
-                    return `<span style="background:${bg};padding:2px 8px;border-radius:6px;font-size:12px">${fmt(v)}</span>`;
-                },
-            })),
-            { title: 'Total', field: 'total', width: 110, hozAlign: 'right',
-              formatter: c => `<strong class="text-indigo-600">${fmt(c.getValue())}</strong>` },
-        ];
-        new Tabulator('#pivot-table', { data: rows, columns, layout: 'fitDataFill' });
+        document.getElementById('pivot-head').innerHTML = `
+            <tr class="border-b border-slate-100 bg-slate-50">
+                <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-6 py-3 sticky left-0 bg-slate-50">Category</th>
+                ${months.map(m => `<th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-3 py-3 whitespace-nowrap">${m}</th>`).join('')}
+                <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-indigo-600 px-4 py-3">Total</th>
+            </tr>`;
+
+        document.getElementById('pivot-body').innerHTML = rows.length === 0
+            ? '<tr><td colspan="14" class="px-6 py-8 text-center text-slate-400">No data for this year.</td></tr>'
+            : rows.map(row => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <td class="px-6 py-3 font-semibold text-slate-800 whitespace-nowrap sticky left-0 bg-white">${row.category}</td>
+                    ${months.map(m => {
+                        const v = row[m] || 0;
+                        const intensity = Math.min(v / 800, 1);
+                        const bg = v ? `rgba(99,102,241,${intensity * 0.12})` : 'transparent';
+                        return `<td class="px-3 py-3 text-right text-xs whitespace-nowrap" style="background:${bg}">${v ? fmt(v) : '<span class="text-slate-300">—</span>'}</td>`;
+                    }).join('')}
+                    <td class="px-4 py-3 text-right font-bold text-indigo-600 whitespace-nowrap">${fmt(row.total)}</td>
+                </tr>
+            `).join('');
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('pivot-body').innerHTML = '<tr><td colspan="14" class="px-6 py-8 text-center text-red-500">Failed to load pivot data.</td></tr>';
     });
+}
+
+function renderBudgetTable(data) {
+    document.getElementById('budget-body').innerHTML = data.length === 0
+        ? '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400">No budget data for this month.</td></tr>'
+        : data.map(row => {
+            const pct = row.budget > 0 ? Math.min((row.actual / row.budget) * 100, 150) : 0;
+            const color = pct > 100 ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
+            const over = row.difference < 0;
+            return `
+                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <td class="px-6 py-3.5 font-semibold text-slate-800">${row.category}</td>
+                    <td class="px-4 py-3.5 text-right text-slate-600">${fmt(row.budget)}</td>
+                    <td class="px-4 py-3.5 text-right font-semibold text-slate-800">${fmt(row.actual)}</td>
+                    <td class="px-4 py-3.5 text-right font-semibold ${over ? 'text-red-500' : 'text-emerald-600'}">${over ? '-' : '+'}${fmt(Math.abs(row.difference))}</td>
+                    <td class="px-4 py-3.5">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div style="width:${Math.min(pct,100)}%;background:${color};height:100%;border-radius:999px"></div>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-500 w-10">${pct.toFixed(0)}%</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3.5 text-center">
+                        <span class="badge-${row.status === 'under' ? 'under' : 'over'}">${row.status === 'under' ? 'On Track' : 'Over'}</span>
+                    </td>
+                </tr>`;
+        }).join('');
 }
 
 function loadBudget() {
     fetch('/api/reports/budget-vs-actual?month=' + getMonth() + '&year=' + getYear(), { headers: apiHeaders })
     .then(r => r.json())
     .then(data => {
+        const categories = data.map(d => d.category);
         const opts = {
             series: [
                 { name: 'Budget', data: data.map(d => d.budget) },
                 { name: 'Actual', data: data.map(d => d.actual) },
             ],
-            chart: { type: 'bar', height: 320, toolbar: { show: false }, fontFamily: 'Inter' },
+            chart: { type: 'bar', height: Math.max(320, data.length * 40), toolbar: { show: false }, fontFamily: 'Inter' },
             colors: ['#c7d2fe', '#6366f1'],
-            plotOptions: { bar: { horizontal: true, borderRadius: 6, barHeight: '65%' } },
-            xaxis: { categories: data.map(d => d.category), labels: { formatter: v => fmtShort(v), style: { colors: '#94a3b8' } } },
-            yaxis: { labels: { style: { colors: '#475569', fontSize: '12px', fontWeight: 500 } } },
+            plotOptions: { bar: { horizontal: true, borderRadius: 6, barHeight: '70%' } },
+            xaxis: {
+                categories: categories,
+                labels: { style: { colors: '#475569', fontSize: '12px', fontWeight: 500 } },
+            },
+            yaxis: {
+                labels: { formatter: v => fmtShort(v), style: { colors: '#94a3b8' } },
+            },
             grid: { borderColor: '#f1f5f9' },
             dataLabels: { enabled: false },
             legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px' },
             tooltip: { y: { formatter: v => fmt(v) } },
         };
         if (budgetChart) {
-            budgetChart.updateOptions({ xaxis: { categories: data.map(d => d.category) } });
-            budgetChart.updateSeries(opts.series);
+            budgetChart.updateOptions(opts);
         } else {
             budgetChart = new ApexCharts(document.getElementById('budget-chart'), opts);
             budgetChart.render();
         }
 
-        new Tabulator('#budget-table', {
-            data,
-            layout: 'fitColumns',
-            columns: [
-                { title: 'Category', field: 'category', width: 160,
-                  formatter: c => `<span class="font-semibold text-slate-800">${c.getValue()}</span>` },
-                { title: 'Budget', field: 'budget', width: 120, hozAlign: 'right', formatter: c => fmt(c.getValue()) },
-                { title: 'Actual', field: 'actual', width: 120, hozAlign: 'right',
-                  formatter: c => `<span class="font-semibold">${fmt(c.getValue())}</span>` },
-                { title: 'Variance', field: 'difference', width: 130, hozAlign: 'right',
-                  formatter: c => {
-                    const v = c.getValue();
-                    const over = v < 0;
-                    return `<span class="font-semibold ${over ? 'text-red-500' : 'text-emerald-600'}">${over ? '-' : '+'}${fmt(Math.abs(v))}</span>`;
-                  }},
-                { title: 'Usage', field: 'actual', width: 160,
-                  formatter: c => {
-                    const row = c.getRow().getData();
-                    const pct = row.budget > 0 ? Math.min((row.actual / row.budget) * 100, 150) : 0;
-                    const color = pct > 100 ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
-                    return `<div class="flex items-center gap-2"><div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div style="width:${Math.min(pct,100)}%;background:${color};height:100%;border-radius:999px"></div></div><span class="text-xs font-semibold text-slate-500 w-10">${pct.toFixed(0)}%</span></div>`;
-                  }},
-                { title: 'Status', field: 'status', width: 90, hozAlign: 'center',
-                  formatter: c => `<span class="badge-${c.getValue() === 'under' ? 'under' : 'over'}">${c.getValue() === 'under' ? 'On Track' : 'Over'}</span>` },
-            ],
-        });
+        renderBudgetTable(data);
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('budget-body').innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500">Failed to load budget data.</td></tr>';
     });
 }
 

@@ -104,7 +104,20 @@
             <h3 class="font-semibold text-slate-900">Recent Transactions</h3>
             <a href="/transactions" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700">View all →</a>
         </div>
-        <div id="recent-table"></div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-slate-100 bg-slate-50">
+                        <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-6 py-3">Date</th>
+                        <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Description</th>
+                        <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Category</th>
+                        <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Type</th>
+                        <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-table"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -174,23 +187,15 @@ fetch('/api/dashboard/summary', { headers: apiHeaders })
 fetch('/api/transactions?per_page=8', { headers: apiHeaders })
 .then(r => r.json())
 .then(data => {
-    new Tabulator('#recent-table', {
-        data: data.slice(0, 8),
-        layout: 'fitColumns',
-        headerVisible: true,
-        columns: [
-            { title: 'Date', field: 'date', width: 110, formatter: c => `<span class="text-slate-500">${c.getValue()}</span>` },
-            { title: 'Description', field: 'description', formatter: c => `<span class="font-medium text-slate-800">${c.getValue() || '—'}</span>` },
-            { title: 'Category', field: 'category.name', width: 130, formatter: c => `<span class="text-slate-600">${c.getValue()}</span>` },
-            { title: 'Type', field: 'type', width: 100, formatter: c => `<span class="badge-${c.getValue()}">${c.getValue()}</span>` },
-            { title: 'Amount', field: 'amount', width: 120, hozAlign: 'right',
-              formatter: c => {
-                const v = c.getValue(), t = c.getRow().getData().type;
-                return `<span class="font-semibold ${t === 'income' ? 'text-emerald-600' : 'text-red-500'}">${t === 'income' ? '+' : '-'}${fmt(v)}</span>`;
-              }},
-        ],
-    });
-    lucide.createIcons();
+    document.getElementById('recent-table').innerHTML = data.slice(0, 8).map(t => `
+        <tr class="border-b border-slate-50 hover:bg-slate-50">
+            <td class="px-6 py-3 text-sm text-slate-500">${(t.date || '').substring(0,10)}</td>
+            <td class="px-4 py-3 text-sm font-medium text-slate-800">${t.description || '—'}</td>
+            <td class="px-4 py-3 text-sm text-slate-600">${t.category?.name || '—'}</td>
+            <td class="px-4 py-3"><span class="badge-${t.type}">${t.type}</span></td>
+            <td class="px-4 py-3 text-right text-sm font-semibold ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}">${t.type === 'income' ? '+' : '-'}${fmt(t.amount)}</td>
+        </tr>
+    `).join('');
 });
 </script>
 @endpush

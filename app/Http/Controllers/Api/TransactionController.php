@@ -17,7 +17,9 @@ class TransactionController extends Controller
         if ($request->date_from)   $query->whereDate('date', '>=', $request->date_from);
         if ($request->date_to)     $query->whereDate('date', '<=', $request->date_to);
 
-        return response()->json($query->orderBy('date', 'desc')->get());
+        return response()->json(
+            $query->with('category')->orderBy('date', 'desc')->get()
+        );
     }
 
     public function store(Request $request)

@@ -58,7 +58,29 @@
 
 <!-- Table -->
 <div class="panel">
-    <div id="transactions-table"></div>
+    <div class="panel-header">
+        <h3 class="font-semibold text-slate-900">All Transactions</h3>
+        <span class="text-xs text-slate-400 font-medium" id="table-info"></span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="border-b border-slate-100 bg-slate-50">
+                    <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-6 py-3">Date</th>
+                    <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Description</th>
+                    <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Category</th>
+                    <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 w-28">Type</th>
+                    <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 w-32">Amount</th>
+                    <th class="text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 w-16"></th>
+                </tr>
+            </thead>
+            <tbody id="transactions-body"></tbody>
+        </table>
+    </div>
+    <div class="flex items-center justify-between px-6 py-4 border-t border-slate-100">
+        <p class="text-xs text-slate-400" id="page-info"></p>
+        <div class="flex gap-2" id="pagination"></div>
+    </div>
 </div>
 
 <!-- Modal -->
@@ -104,7 +126,9 @@
 
 @push('scripts')
 <script>
-let table;
+let allData = [];
+let currentPage = 1;
+const perPage = 20;
 
 fetch('/api/categories', { headers: apiHeaders })
 .then(r => r.json())
@@ -112,6 +136,11 @@ fetch('/api/categories', { headers: apiHeaders })
     const sel = document.getElementById('m-category');
     cats.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
 });
+
+function formatDate(d) {
+    if (!d) return '—';
+    return d.substring(0, 10);
+}
 
 function updateStats(data) {
     const income = data.filter(t => t.type === 'income').reduce((s,t) => s + parseFloat(t.amount), 0);
@@ -121,40 +150,82 @@ function updateStats(data) {
     document.getElementById('stat-count').textContent = data.length;
 }
 
+function renderPage() {
+    const total = allData.length;
+    const pages = Math.max(1, Math.ceil(total / perPage));
+    if (currentPage > pages) currentPage = pages;
+    const start = (currentPage - 1) * perPage;
+    const rows = allData.slice(start, start + perPage);
+
+    document.getElementById('table-info').textContent = total + ' total';
+    document.getElementById('page-info').textContent = total === 0
+        ? 'No transactions found'
+        : `Showing ${start + 1}–${Math.min(start + perPage, total)} of ${total}`;
+
+    document.getElementById('transactions-body').innerHTML = rows.length === 0
+        ? '<tr><td colspan="6" class="px-6 py-10 text-center text-slate-400 text-sm">No transactions match your filters.</td></tr>'
+        : rows.map(t => `
+            <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                <td class="px-6 py-3.5 text-sm text-slate-500 font-medium whitespace-nowrap">${formatDate(t.date)}</td>
+                <td class="px-4 py-3.5 text-sm font-medium text-slate-800">${t.description || '—'}</td>
+                <td class="px-4 py-3.5 text-sm text-slate-600">
+                    <span class="inline-flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${t.category?.color || '#94a3b8'}"></span>
+                        ${t.category?.name || '—'}
+                    </span>
+                </td>
+                <td class="px-4 py-3.5"><span class="badge-${t.type}">${t.type}</span></td>
+                <td class="px-4 py-3.5 text-right text-sm font-bold whitespace-nowrap ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}">
+                    ${t.type === 'income' ? '+' : '-'}${fmt(t.amount)}
+                </td>
+                <td class="px-4 py-3.5 text-center">
+                    <button onclick="deleteTransaction(${t.id})" class="text-slate-300 hover:text-red-500 transition p-1" title="Delete">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+    // Pagination buttons
+    let btns = '';
+    if (pages > 1) {
+        btns += `<button onclick="goPage(${currentPage - 1})" class="btn-secondary !py-1.5 !px-3 text-xs" ${currentPage === 1 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>← Prev</button>`;
+        const range = [];
+        for (let i = 1; i <= pages; i++) {
+            if (i === 1 || i === pages || (i >= currentPage - 2 && i <= currentPage + 2)) range.push(i);
+        }
+        let prev = 0;
+        range.forEach(i => {
+            if (prev && i - prev > 1) btns += `<span class="px-1 text-slate-400 text-xs self-center">…</span>`;
+            btns += `<button onclick="goPage(${i})" class="!py-1.5 !px-3 text-xs rounded-lg font-semibold ${i === currentPage ? 'bg-indigo-600 text-white' : 'btn-secondary'}">${i}</button>`;
+            prev = i;
+        });
+        btns += `<button onclick="goPage(${currentPage + 1})" class="btn-secondary !py-1.5 !px-3 text-xs" ${currentPage === pages ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>Next →</button>`;
+    }
+    document.getElementById('pagination').innerHTML = btns;
+    lucide.createIcons();
+}
+
+function goPage(p) {
+    const pages = Math.ceil(allData.length / perPage);
+    if (p < 1 || p > pages) return;
+    currentPage = p;
+    renderPage();
+}
+
 function loadTable(params = {}) {
     const qs = new URLSearchParams(params).toString();
     fetch('/api/transactions?' + qs, { headers: apiHeaders })
     .then(r => r.json())
     .then(data => {
+        allData = data;
+        currentPage = 1;
         updateStats(data);
-        if (table) { table.replaceData(data); return; }
-        table = new Tabulator('#transactions-table', {
-            data, layout: 'fitColumns', pagination: 'local', paginationSize: 15,
-            paginationCounter: 'rows',
-            columns: [
-                { title: 'Date', field: 'date', width: 120, editor: 'date', editable: true,
-                  formatter: c => `<span class="text-slate-500 font-medium">${c.getValue()}</span>` },
-                { title: 'Description', field: 'description', editor: 'input', editable: true,
-                  formatter: c => `<span class="font-medium text-slate-800">${c.getValue() || '—'}</span>` },
-                { title: 'Category', field: 'category.name', width: 150,
-                  formatter: c => `<span class="inline-flex items-center gap-1.5 text-slate-600"><span class="w-2 h-2 rounded-full bg-indigo-400"></span>${c.getValue()}</span>` },
-                { title: 'Type', field: 'type', width: 110,
-                  formatter: c => `<span class="badge-${c.getValue()}">${c.getValue()}</span>` },
-                { title: 'Amount', field: 'amount', width: 130, hozAlign: 'right', editor: 'number', editable: true,
-                  formatter: c => {
-                    const t = c.getRow().getData().type;
-                    return `<span class="font-bold ${t === 'income' ? 'text-emerald-600' : 'text-red-500'}">${t === 'income' ? '+' : '-'}${fmt(c.getValue())}</span>`;
-                  }},
-                { title: '', width: 50, hozAlign: 'center',
-                  formatter: () => '<button class="text-slate-300 hover:text-red-500 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>',
-                  cellClick: (e, cell) => deleteTransaction(cell.getRow().getData().id) },
-            ],
-            cellEdited: cell => {
-                const row = cell.getRow().getData();
-                fetch('/api/transactions/' + row.id, { method: 'PUT', headers: apiHeaders, body: JSON.stringify({ [cell.getField()]: cell.getValue() }) });
-            },
-        });
-        lucide.createIcons();
+        renderPage();
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('transactions-body').innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-red-500 text-sm">Failed to load transactions.</td></tr>';
     });
 }
 
