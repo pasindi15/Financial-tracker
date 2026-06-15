@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financial-tracker-app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=financial_tracker
+      - DB_USERNAME=laravel
+      - DB_PASSWORD=laravel_password
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    networks:
+      - financial-tracker
+    command: sh -c "composer install && php artisan key:generate && php artisan migrate --seed && php artisan serve --host=0.0.0.0"
+
+  db:
+    image: mysql:8.0
+    container_name: financial-tracker-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: financial_tracker
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_PASSWORD: laravel_password
+      MYSQL_USER: laravel
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - financial-tracker
+
+volumes:
+  db_data:
+
+networks:
+  financial-tracker:
+    driver: bridge
