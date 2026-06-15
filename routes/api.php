@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ReportController;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
@@ -24,4 +25,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('transactions', TransactionController::class);
     Route::apiResource('budgets', BudgetController::class);
     Route::get('dashboard/summary', [DashboardController::class, 'summary']);
+    Route::get('reports/pivot', [ReportController::class, 'pivot']);
+    Route::get('reports/budget-vs-actual', [ReportController::class, 'budgetVsActual']);
+    Route::get('reports/monthly-trend', [ReportController::class, 'monthlyTrend']);
+});
+
+// File downloads: allow token via query param for browser navigation
+Route::middleware(['auth.query', 'auth:sanctum'])->group(function () {
+    Route::get('reports/export-excel', [ReportController::class, 'exportExcel']);
+    Route::get('reports/export-pdf', [ReportController::class, 'exportPdf']);
 });

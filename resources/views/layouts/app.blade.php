@@ -35,6 +35,7 @@
                     <a href="/transactions" class="@if(request()->is('transactions')) bg-blue-50 text-blue-600 @else text-gray-600 hover:bg-gray-100 @endif flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition">💳 Transactions</a>
                     <a href="/categories" class="@if(request()->is('categories')) bg-blue-50 text-blue-600 @else text-gray-600 hover:bg-gray-100 @endif flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition">🏷️ Categories</a>
                     <a href="/budgets" class="@if(request()->is('budgets')) bg-blue-50 text-blue-600 @else text-gray-600 hover:bg-gray-100 @endif flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition">🎯 Budgets</a>
+                    <a href="/reports" class="@if(request()->is('reports')) bg-blue-50 text-blue-600 @else text-gray-600 hover:bg-gray-100 @endif flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition">📈 Reports</a>
                 </div>
             </div>
             <button onclick="logout()" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded text-sm font-medium">🚪 Logout</button>
