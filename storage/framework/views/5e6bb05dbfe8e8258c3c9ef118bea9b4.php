@@ -40,7 +40,21 @@
     <div class="panel-header">
         <h3 class="font-semibold text-slate-900">Budget Details</h3>
     </div>
-    <div id="budget-table"></div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-slate-100 bg-slate-50">
+                    <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-6 py-3">Category</th>
+                    <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Budget</th>
+                    <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Spent</th>
+                    <th class="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Remaining</th>
+                    <th class="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 w-44">Progress</th>
+                    <th class="text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">Status</th>
+                </tr>
+            </thead>
+            <tbody id="budget-table"></tbody>
+        </table>
+    </div>
 </div>
 
 <?php $__env->startPush('scripts'); ?>
@@ -82,31 +96,29 @@ function loadBudgets() {
             </div>`;
         }).join('');
 
-        new Tabulator('#budget-table', {
-            data, layout: 'fitColumns',
-            columns: [
-                { title: 'Category', field: 'category', width: 160,
-                  formatter: c => `<span class="font-semibold text-slate-800">${c.getValue()}</span>` },
-                { title: 'Budget', field: 'budget', width: 120, hozAlign: 'right', formatter: c => fmt(c.getValue()) },
-                { title: 'Spent', field: 'actual', width: 120, hozAlign: 'right',
-                  formatter: c => `<span class="font-semibold">${fmt(c.getValue())}</span>` },
-                { title: 'Remaining', field: 'difference', width: 130, hozAlign: 'right',
-                  formatter: c => {
-                    const v = c.getValue();
-                    return `<span class="font-semibold ${v >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(Math.abs(v))}</span>`;
-                  }},
-                { title: 'Progress', field: 'actual', width: 200,
-                  formatter: c => {
-                    const row = c.getRow().getData();
-                    const pct = row.budget > 0 ? Math.min((row.actual / row.budget) * 100, 100) : 0;
-                    const over = row.actual > row.budget;
-                    const color = over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
-                    return `<div class="flex items-center gap-2"><div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div style="width:${pct}%;background:${color};height:100%;border-radius:999px"></div></div><span class="text-xs font-bold text-slate-500">${pct.toFixed(0)}%</span></div>`;
-                  }},
-                { title: 'Status', field: 'status', width: 100, hozAlign: 'center',
-                  formatter: c => `<span class="badge-${c.getValue() === 'under' ? 'under' : 'over'}">${c.getValue() === 'under' ? 'On Track' : 'Over Budget'}</span>` },
-            ],
-        });
+        document.getElementById('budget-table').innerHTML = data.map(d => {
+            const pct = d.budget > 0 ? Math.min((d.actual / d.budget) * 100, 100) : 0;
+            const over = d.actual > d.budget;
+            const color = over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#10b981';
+            return `
+                <tr class="border-b border-slate-50 hover:bg-slate-50">
+                    <td class="px-6 py-3.5 font-semibold text-slate-800">${d.category}</td>
+                    <td class="px-4 py-3.5 text-right text-slate-600">${fmt(d.budget)}</td>
+                    <td class="px-4 py-3.5 text-right font-semibold">${fmt(d.actual)}</td>
+                    <td class="px-4 py-3.5 text-right font-semibold ${d.difference >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(Math.abs(d.difference))}</td>
+                    <td class="px-4 py-3.5">
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div style="width:${pct}%;background:${color};height:100%;border-radius:999px"></div>
+                            </div>
+                            <span class="text-xs font-bold text-slate-500">${pct.toFixed(0)}%</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3.5 text-center">
+                        <span class="badge-${d.status === 'under' ? 'under' : 'over'}">${d.status === 'under' ? 'On Track' : 'Over Budget'}</span>
+                    </td>
+                </tr>`;
+        }).join('');
     });
 }
 
