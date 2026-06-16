@@ -86,6 +86,9 @@
                     </button>
                 </form>
 
+                @if(session('error'))
+                <div class="mt-4 text-red-600 text-sm text-center bg-red-50 rounded-lg py-2 px-3">{{ session('error') }}</div>
+                @endif
                 <div id="error" class="mt-4 text-red-600 text-sm text-center hidden bg-red-50 rounded-lg py-2"></div>
 
                 <div class="mt-8 p-4 bg-slate-50 rounded-xl border border-slate-100">

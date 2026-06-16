@@ -29,9 +29,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('reports/budget-vs-actual', [ReportController::class, 'budgetVsActual']);
     Route::get('reports/monthly-trend', [ReportController::class, 'monthlyTrend']);
 });
-
-// File downloads: allow token via query param for browser navigation
-Route::middleware(['auth.query', 'auth:sanctum'])->group(function () {
-    Route::get('reports/export-excel', [ReportController::class, 'exportExcel']);
-    Route::get('reports/export-pdf', [ReportController::class, 'exportPdf']);
-});

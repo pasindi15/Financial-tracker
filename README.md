@@ -132,7 +132,7 @@ fetch('/api/dashboard/summary', { headers: apiHeaders })
 | `transactions.blade.php` | `GET/POST/DELETE /api/transactions`, `GET /api/categories` |
 | `categories.blade.php` | `GET/POST/DELETE /api/categories` |
 | `budgets.blade.php` | `GET /api/reports/budget-vs-actual` |
-| `reports.blade.php` | `GET /api/reports/pivot`, `monthly-trend`, `budget-vs-actual`, `dashboard/summary`; export via `/api/reports/export-excel` and `/api/reports/export-pdf` |
+| `reports.blade.php` | `GET /api/reports/pivot`, `monthly-trend`, `budget-vs-actual`, `dashboard/summary`; export via `/reports/export-excel` and `/reports/export-pdf` |
 
 ### 4. Auth guard on the client
 
@@ -140,15 +140,31 @@ fetch('/api/dashboard/summary', { headers: apiHeaders })
 - `login.blade.php` redirects to `/dashboard` if a token already exists.
 - Logout clears `localStorage` and sends the user to `/login`.
 
-### 5. File downloads (special case)
+### 5. File downloads (reports export)
 
-Excel/PDF exports use browser navigation (not `fetch`) because they trigger file downloads:
+Excel/PDF exports use **web routes** (not `/api/*`) because browser file downloads navigate with `window.location.href`. API routes would fail with `Route [login] not defined` when Sanctum could not authenticate the query token on a GET navigation request.
 
 ```javascript
-window.location.href = '/api/reports/export-excel?token=' + token;
+function exportParams() {
+    return 'token=' + encodeURIComponent(token) + '&year=' + encodeURIComponent(getYear());
+}
+window.location.href = '/reports/export-excel?' + exportParams();
+window.location.href = '/reports/export-pdf?' + exportParams();
 ```
 
-The `AuthenticateQueryToken` middleware (`app/Http/Middleware/AuthenticateQueryToken.php`) copies the `?token=` query param into the `Authorization` header so Sanctum can authenticate the request.
+| Route | Middleware | Output |
+|-------|------------|--------|
+| `GET /reports/export-excel?token={token}&year={year}` | `AuthenticateExport` | `.xlsx` workbook |
+| `GET /reports/export-pdf?token={token}&year={year}` | `AuthenticateExport` | `.pdf` report (A4 landscape) |
+
+The `AuthenticateExport` middleware (`app/Http/Middleware/AuthenticateExport.php`):
+
+1. Uses an existing web session if present.
+2. Otherwise validates the Sanctum token from `?token=` via `PersonalAccessToken::findToken()`.
+3. Logs the user in and proceeds to the export controller.
+4. Redirects to `/login` with an error message if the token is missing or invalid.
+
+**Report format:** Both exports include FinPulse branding, user metadata, income/expense/net summary, and a styled transaction table filtered by the selected report year.
 
 ---
 
@@ -176,16 +192,15 @@ The `AuthenticateQueryToken` middleware (`app/Http/Middleware/AuthenticateQueryT
     health: '/up',
 )
 ->withMiddleware(function (Middleware $middleware) {
-    $middleware->alias([
-        'auth.query' => \App\Http\Middleware\AuthenticateQueryToken::class,
-    ]);
+    $middleware->redirectGuestsTo('/login');
     $middleware->statefulApi();
 })
 ```
 
-- **Web routes** prefix: none (e.g. `/dashboard`)
+- **Web routes** prefix: none (e.g. `/dashboard`, `/reports/export-pdf`)
 - **API routes** prefix: `/api` (e.g. `/api/transactions`)
 - **Health check**: `GET /up`
+- **Named login route:** `GET /login` → `login` (used when unauthenticated users are redirected)
 
 ### Controllers (API layer)
 
@@ -228,8 +243,8 @@ php artisan migrate --seed
 
 | File | Purpose |
 |------|---------|
-| `app/Exports/TransactionsExport.php` | Maatwebsite Excel export class |
-| `resources/views/exports/transactions-pdf.blade.php` | Blade template rendered to PDF via DomPDF |
+| `app/Exports/TransactionsExport.php` | Maatwebsite Excel export — branded header, summary row, styled table, currency formatting |
+| `resources/views/exports/transactions-pdf.blade.php` | DomPDF template — landscape layout, summary cards, zebra-striped table, page numbers |
 
 ### Configuration
 
@@ -283,7 +298,7 @@ Financial Tracker/
 │   │   │   │   └── TransactionController.php
 │   │   │   └── Controller.php           # Base controller
 │   │   └── Middleware/
-│   │       └── AuthenticateQueryToken.php  # Token via ?token= for downloads
+│   │       └── AuthenticateExport.php   # Sanctum token auth for report downloads
 │   ├── Models/
 │   │   ├── Budget.php
 │   │   ├── Category.php
@@ -394,8 +409,13 @@ All user-owned tables cascade on delete when a user is removed.
 | `GET` | `/api/reports/pivot?year=2026` | Category × month pivot table |
 | `GET` | `/api/reports/budget-vs-actual?month=6&year=2026` | Budget comparison |
 | `GET` | `/api/reports/monthly-trend?year=2026` | Monthly income vs expense |
-| `GET` | `/api/reports/export-excel?token={token}` | Download Excel (query token) |
-| `GET` | `/api/reports/export-pdf?token={token}` | Download PDF (query token) |
+
+### Report downloads (web routes, authenticated via query token)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/reports/export-excel?token={token}&year=2026` | Download Excel report for selected year |
+| `GET` | `/reports/export-pdf?token={token}&year=2026` | Download PDF report for selected year |
 
 ---
 
@@ -405,8 +425,8 @@ All user-owned tables cascade on delete when a user is removed.
 2. **Token:** Laravel Sanctum creates a personal access token via `$user->createToken('app')`.
 3. **Storage:** Frontend saves the plain-text token in `localStorage` as `auth_token`.
 4. **Requests:** Every API call sends `Authorization: Bearer {token}`.
-5. **Middleware:** `auth:sanctum` on protected routes in `routes/api.php`.
-6. **Exports:** `auth.query` middleware allows passing the token as a URL query parameter for file downloads.
+5. **Middleware:** `auth:sanctum` on protected API routes in `routes/api.php`.
+6. **Exports:** Web routes in `routes/web.php` use `AuthenticateExport` middleware. The reports page passes `encodeURIComponent(token)` and the selected `year` as query parameters.
 
 Sanctum configuration: `config/sanctum.php`  
 Token table migration: `database/migrations/2019_12_14_000001_create_personal_access_tokens_table.php`
@@ -595,6 +615,8 @@ The seeder creates 12 income/expense categories and a full year of sample transa
 | `php` or `composer` not found | Use **Herd Terminal**, not plain PowerShell |
 | `SQLSTATE[HY000] [2002] Connection refused` | Start MySQL, use Docker, or switch to SQLite in `.env` |
 | Blank dashboard / 401 errors | Log in again; check `localStorage.auth_token` in browser DevTools |
+| PDF/Excel download shows "Route [login] not defined" | Fixed — exports now use `/reports/export-*` web routes with `AuthenticateExport` middleware (not `/api/*`) |
+| Export redirects to login | Token expired or missing — sign in again; token is URL-encoded automatically |
 | `No application encryption key` | Run `php artisan key:generate` |
 | Docker port 8000 in use | Change `"8000:8000"` in `docker-compose.yml` or stop the conflicting process |
 | Composer timeout | Run `composer install --no-interaction` |
