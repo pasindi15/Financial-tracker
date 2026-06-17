@@ -128,25 +128,26 @@
     <table class="meta">
         <tr>
             <td class="meta-label">Prepared for</td>
-            <td>{{ $user->name }} &lt;{{ $user->email }}&gt;</td>
+            <td><?php echo e($user->name); ?> &lt;<?php echo e($user->email); ?>&gt;</td>
         </tr>
         <tr>
             <td class="meta-label">Report period</td>
             <td>
-                @if(!empty($filters['year']))
-                    Calendar year {{ $filters['year'] }}
-                @else
+                <?php if(!empty($filters['year'])): ?>
+                    Calendar year <?php echo e($filters['year']); ?>
+
+                <?php else: ?>
                     All transactions on record
-                @endif
+                <?php endif; ?>
             </td>
         </tr>
         <tr>
             <td class="meta-label">Generated</td>
-            <td>{{ $generatedAt->format('F j, Y \a\t g:i A') }}</td>
+            <td><?php echo e($generatedAt->format('F j, Y \a\t g:i A')); ?></td>
         </tr>
         <tr>
             <td class="meta-label">Total records</td>
-            <td>{{ $transactions->count() }} transactions</td>
+            <td><?php echo e($transactions->count()); ?> transactions</td>
         </tr>
     </table>
 
@@ -154,15 +155,15 @@
         <tr>
             <td class="card-income">
                 <div class="summary-label">Total Income</div>
-                <div class="summary-value">${{ number_format($summary['income'], 2) }}</div>
+                <div class="summary-value">$<?php echo e(number_format($summary['income'], 2)); ?></div>
             </td>
             <td class="card-expense">
                 <div class="summary-label">Total Expenses</div>
-                <div class="summary-value">${{ number_format($summary['expense'], 2) }}</div>
+                <div class="summary-value">$<?php echo e(number_format($summary['expense'], 2)); ?></div>
             </td>
             <td class="card-balance">
                 <div class="summary-label">Net Balance</div>
-                <div class="summary-value">${{ number_format($summary['balance'], 2) }}</div>
+                <div class="summary-value">$<?php echo e(number_format($summary['balance'], 2)); ?></div>
             </td>
         </tr>
     </table>
@@ -179,21 +180,21 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($transactions as $t)
+            <?php $__empty_1 = true; $__currentLoopData = $transactions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $t): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
             <tr>
-                <td>{{ $t->date->format('M d, Y') }}</td>
-                <td>{{ $t->description ?? '—' }}</td>
-                <td>{{ $t->category->name }}</td>
-                <td><span class="badge badge-{{ $t->type }}">{{ ucfirst($t->type) }}</span></td>
-                <td class="amount">${{ number_format($t->amount, 2) }}</td>
+                <td><?php echo e($t->date->format('M d, Y')); ?></td>
+                <td><?php echo e($t->description ?? '—'); ?></td>
+                <td><?php echo e($t->category->name); ?></td>
+                <td><span class="badge badge-<?php echo e($t->type); ?>"><?php echo e(ucfirst($t->type)); ?></span></td>
+                <td class="amount">$<?php echo e(number_format($t->amount, 2)); ?></td>
             </tr>
-            @empty
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
             <tr>
                 <td colspan="5" style="text-align:center; padding: 20px; color:#64748b;">
                     No transactions found for the selected period.
                 </td>
             </tr>
-            @endforelse
+            <?php endif; ?>
         </tbody>
     </table>
 
@@ -208,3 +209,4 @@
     </script>
 </body>
 </html>
+<?php /**PATH E:\Projects\Financial Tracker\resources\views/exports/transactions-pdf.blade.php ENDPATH**/ ?>

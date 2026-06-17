@@ -286,8 +286,11 @@ function loadBudget() {
 }
 
 function loadAll() { loadTrend(); loadPivot(); loadBudget(); loadExpensePie(); }
-function exportExcel() { window.location.href = '/api/reports/export-excel?token=' + token; }
-function exportPdf()   { window.location.href = '/api/reports/export-pdf?token=' + token; }
+function exportParams() {
+    return 'token=' + encodeURIComponent(token) + '&year=' + encodeURIComponent(getYear());
+}
+function exportExcel() { window.location.href = '/reports/export-excel?' + exportParams(); }
+function exportPdf()   { window.location.href = '/reports/export-pdf?' + exportParams(); }
 
 loadAll();
 lucide.createIcons();

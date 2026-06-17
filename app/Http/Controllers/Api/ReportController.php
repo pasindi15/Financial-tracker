@@ -104,27 +104,75 @@ class ReportController extends Controller
 
     public function exportExcel(Request $request)
     {
+        $filters = $this->exportFilters($request);
+        $transactions = $this->filteredTransactions($filters);
+        $summary = $this->buildExportSummary($transactions);
+        $filename = 'finpulse-report-' . ($filters['year'] ?? now()->year) . '-' . now()->format('Y-m-d') . '.xlsx';
+
         return Excel::download(
-            new TransactionsExport($request->only(['type', 'date_from', 'date_to'])),
-            'transactions-' . now()->format('Y-m-d') . '.xlsx'
+            new TransactionsExport($filters, $summary, auth()->user()),
+            $filename
         );
     }
 
     public function exportPdf(Request $request)
     {
-        $transactions = Transaction::with('category')
-            ->where('user_id', auth()->id())
-            ->orderBy('date', 'desc')
-            ->get();
+        $filters = $this->exportFilters($request);
+        $transactions = $this->filteredTransactions($filters);
+        $summary = $this->buildExportSummary($transactions);
+        $filename = 'finpulse-report-' . ($filters['year'] ?? now()->year) . '-' . now()->format('Y-m-d') . '.pdf';
 
-        $summary = [
-            'income' => $transactions->where('type', 'income')->sum('amount'),
-            'expense' => $transactions->where('type', 'expense')->sum('amount'),
+        $pdf = Pdf::loadView('exports.transactions-pdf', [
+            'transactions' => $transactions,
+            'summary' => $summary,
+            'user' => auth()->user(),
+            'filters' => $filters,
+            'generatedAt' => now(),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download($filename);
+    }
+
+    private function exportFilters(Request $request): array
+    {
+        return array_filter([
+            'year' => $request->get('year'),
+            'type' => $request->get('type'),
+            'date_from' => $request->get('date_from'),
+            'date_to' => $request->get('date_to'),
+        ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    private function filteredTransactions(array $filters)
+    {
+        $query = Transaction::with('category')
+            ->where('user_id', auth()->id());
+
+        if (! empty($filters['year'])) {
+            $query->whereYear('date', $filters['year']);
+        }
+        if (! empty($filters['type'])) {
+            $query->where('type', $filters['type']);
+        }
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('date', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('date', '<=', $filters['date_to']);
+        }
+
+        return $query->orderBy('date', 'desc')->get();
+    }
+
+    private function buildExportSummary($transactions): array
+    {
+        $income = $transactions->where('type', 'income')->sum('amount');
+        $expense = $transactions->where('type', 'expense')->sum('amount');
+
+        return [
+            'income' => $income,
+            'expense' => $expense,
+            'balance' => $income - $expense,
         ];
-        $summary['balance'] = $summary['income'] - $summary['expense'];
-
-        $pdf = Pdf::loadView('exports.transactions-pdf', compact('transactions', 'summary'));
-
-        return $pdf->download('transactions-' . now()->format('Y-m-d') . '.pdf');
     }
 }
